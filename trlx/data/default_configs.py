@@ -23,8 +23,10 @@ def default_ppo_config():
             eval_interval=100,
             pipeline="PromptPipeline",
             trainer="AcceleratePPOTrainer",
+            tracker="tensorboard",
         ),
-        model=ModelConfig(model_path="lvwerra/gpt2-imdb", num_layers_unfrozen=2),
+        # model=ModelConfig(model_path="lvwerra/gpt2-imdb", num_layers_unfrozen=2),
+        model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),#Anisha: using gpt2
         tokenizer=TokenizerConfig(tokenizer_path="gpt2", truncation_side="right"),
         optimizer=OptimizerConfig(
             name="adamw", kwargs=dict(lr=3e-5, betas=(0.9, 0.95), eps=1.0e-8, weight_decay=1.0e-6)
@@ -51,7 +53,7 @@ def default_ppo_config():
                 max_new_tokens=40,
                 top_k=0,
                 top_p=1.0,
-                do_sample=True,
+                do_sample=False,#since we want greedy, sample=True,
             ),
         ),
     )

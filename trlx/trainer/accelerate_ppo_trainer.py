@@ -274,7 +274,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
         ppo_rl_elements = []
         stats = {}
         clock = Clock()
-
+        torch.set_grad_enabled(False)
         while len(ppo_rl_elements) < num_rollouts:
             # Get next batch in prompt dataset
             batch: PromptBatch = next(self.prompt_iterator)
@@ -284,6 +284,8 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             # Generate samples from the language model (similar to using HuggingFace `generate` method)
             samples = self.generate(batch["input_ids"], batch["attention_mask"])
             stats["time/exp_generate"] = time() - exp_generate_time
+
+            logger.info("Anisha: stats[time/exp_generate]={}".format(stats["time/exp_generate"]))
 
             prompt_tensors = batch.input_ids
             device = samples.device
@@ -300,12 +302,13 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             gathered_prompt_sizes = self.accelerator.gather(prompt_sizes)
             metadata = gather_dict({k: v for k, v in batch.items() if k != "input_ids" and k != "attention_mask"})
 
-            if self.accelerator.is_main_process:
+            if True: #Anisha:self.accelerator.is_main_process:
                 all_str_samples, all_str_prompts, all_str_outputs = self.decode(
                     gathered_prompts, gathered_samples, gathered_prompt_sizes, append_eos_token=True
                 )
 
                 exp_score_time = time()
+                # with torch.no_grad():
                 all_scores = torch.tensor(
                     self.reward_fn(
                         samples=all_str_samples, prompts=all_str_prompts, outputs=all_str_outputs, **metadata
@@ -318,6 +321,8 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
             else:
                 all_scores = None
+
+            logger.info(f"Anisha: all_scores = {all_scores}")
 
             if torch.distributed.is_initialized():
                 scores = torch.empty(len(samples), device=device)
@@ -397,7 +402,11 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                         ).logits
             else:
                 all_tokens = torch.cat((prompt_tensors.to(device), sample_outputs), dim=1)
+                logger.info(f"Anisha: all_tokens.shape={all_tokens.shape}, and \n all_tokens[0]={all_tokens[0]}")
                 attention_mask = all_tokens.not_equal(self.tokenizer.pad_token_id).long().to(device)
+                logger.info(f"Anisha: attention_mask in accelerate_ppo_trainer={attention_mask}")
+                logger.info(f"Anisha: attention_mask[0] in accelerate_ppo_trainer={attention_mask[0]}")
+                logger.info(f"Anisha: attention_mask.shape in accelerate_ppo_trainer={attention_mask.shape}")
                 with torch.no_grad():
                     logits, *_, values = self.model(
                         all_tokens,
