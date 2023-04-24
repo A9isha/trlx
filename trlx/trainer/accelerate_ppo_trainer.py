@@ -327,17 +327,20 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 logger.info("Anisha = ",str(stats["time/exp_score"]))
 
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
+
+                if torch.distributed.is_initialized():
+                    scores = torch.empty(len(samples), device=device)
+                    torch.distributed.scatter(scores, all_scores)
+                else:
+                    scores = all_scores[0].clone().detach()
+                
             else:
                 all_scores = None
+            
+            xm.mark_step()
+            logger.info(f"Anisha: len(scores) = {len(scores)}")
 
-            # logger.info(f"Anisha: all_scores = {all_scores}")
-
-            if torch.distributed.is_initialized():
-                scores = torch.empty(len(samples), device=device)
-                torch.distributed.scatter(scores, all_scores)
-            else:
-                scores = all_scores[0].clone().detach()
-
+            
             str_samples, str_prompts, str_outputs = self.decode(prompt_tensors, samples, append_eos_token=True)
 
             # Pad the sample outputs
