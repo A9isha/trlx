@@ -2,10 +2,7 @@
 # import sqlite3
 # from urllib.request import urlretrieve
 # import trlx
-#Anisha: pt/xla installations
-import torch_xla.core.xla_model as xm
-import torch_xla.debug.metrics as met
-import torch_xla.debug.profiler as xp
+
 
 # url = "https://raw.githubusercontent.com/JD-P/simulacra-aesthetic-captions/main/sac_public_2022_06_29.sqlite"
 # dbpath = "sac_public_2022_06_29.sqlite"
@@ -61,13 +58,25 @@ from datasets import load_dataset
 from transformers import pipeline
 
 import trlx
+
 from trlx.data.default_configs import TRLConfig, default_ppo_config
 
+#Anisha: pt/xla installations
+import torch_xla.core.xla_model as xm
+import torch_xla.debug.metrics as met
+import torch_xla.debug.profiler as xp
+import torch_xla.distributed.xla_backend
 
 def get_positive_score(scores):
     "Extract value associated with a positive sentiment from pipeline's output"
     return dict(map(lambda x: tuple(x.values()), scores))["POSITIVE"]
 
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+
+    # initialize the xla process group
+    torch.distributed.init_process_group("xla", rank=rank, world_size=world_size)
 
 def main(hparams={}):
     
@@ -75,6 +84,13 @@ def main(hparams={}):
     server = xp.start_server(3294)
     
     device = xm.xla_device()
+    print(f"Anisha: device = {device}")
+
+    
+    new_rank = xm.get_ordinal()
+    world_size = xm.xrt_world_size()
+    setup(rank=new_rank, world_size=world_size)
+
 
     # Merge sweep config with default config if given
     config = TRLConfig.update(default_ppo_config().to_dict(), hparams)
@@ -87,14 +103,19 @@ def main(hparams={}):
     sentiment_fn = pipeline(
         "sentiment-analysis",
         "lvwerra/distilbert-imdb",
+        # "lvwerra/gpt2-imdb",
         # "gpt2",
         top_k=2,
         truncation=True,
         batch_size=256,
         device=device,
     )
+    # #Anisha: since ValueError: Pipeline with tokenizer without pad_token cannot do batching. You can try to set it with `pipe.tokenizer.pad_token_id = model.config.eos_token_id`.
+    # sentiment_fn.tokenizer.pad_token = sentiment_fn.tokenizer.eos_token
+    # sentiment_fn.tokenizer.padding_side = "left"
 
     def reward_fn(samples: List[str], **kwargs) -> List[float]:
+
         sentiments = list(map(get_positive_score, sentiment_fn(samples)))
         return sentiments
 

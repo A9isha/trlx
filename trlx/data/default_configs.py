@@ -23,7 +23,7 @@ def default_ppo_config():
             eval_interval=100,
             pipeline="PromptPipeline",
             trainer="AcceleratePPOTrainer",
-            tracker="tensorboard",
+            tracker="wandb",
         ),
         # model=ModelConfig(model_path="lvwerra/gpt2-imdb", num_layers_unfrozen=2),
         model=ModelConfig(model_path="gpt2", num_layers_unfrozen=2),#Anisha: using gpt2

@@ -56,7 +56,16 @@ class AccelerateRLTrainer(BaseRLTrainer):
         self.num_mb = config.train.batch_size // self.mb_size
         self.mb_count = 0
         self.accelerator = Accelerator(log_with=config.train.tracker, logging_dir=config.train.logging_dir)
-
+        # print(f"Anisha: self.accelerator = {self.accelerator}")
+        # print(f"Anisha: config.train = {config.train}")
+        logger.info(f"Anisha: device = {self.accelerator.device}")
+        logger.info(f"Anisha: distributed_type = {self.accelerator.distributed_type}")
+        logger.info(f"Anisha: local_process_index = {self.accelerator.local_process_index}")
+        logger.info(f"Anisha: num_processes = {self.accelerator.num_processes}")
+        logger.info(f"Anisha: process_index = {self.accelerator.process_index}")
+        logger.info(f"Anisha: state = {self.accelerator.state}")
+        logger.info(f"Anisha: use_distributed = {self.accelerator.use_distributed}")
+        logger.info(f"Anisha: torch.distributed.is_initialized() = {torch.distributed.is_initialized()}")
         if self.accelerator.state.deepspeed_plugin is not None:
             # by accelerate's default, arguments in `model.forward` would be casted to half
             if "fp16" in self.accelerator.state.deepspeed_plugin.deepspeed_config:
@@ -114,6 +123,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
             elif config.train.tracker == "tensorboard":
                 # flatten config for tensorboard, split list in hparams into flatten config
                 config_dict_flat = flatten_dict(config_dict)
+                logger.info(f"Anisha: config_dict = {config_dict}")
                 config_dict_flat["optimizer/kwargs/beta_1"] = config_dict_flat["optimizer/kwargs/betas"][0]
                 config_dict_flat["optimizer/kwargs/beta_2"] = config_dict_flat["optimizer/kwargs/betas"][1]
                 config_dict_flat.pop("optimizer/kwargs/betas", None)
@@ -377,6 +387,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
             tbar.close()
 
             stats["time/generate"] = time() - generate_time
+            logger.info("Anisha: stats[time/generate] = ", str(stats["time/generate"]))
 
             if self.accelerator.is_main_process:
                 str_samples, str_prompts, str_outputs = self.decode(all_prompts, all_samples, all_prompt_sizes)
@@ -402,6 +413,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                         rewards = rewards.tolist()
                     columns_data.append(rewards)
                     stats[f"reward/mean{sweep_suffix}"] = mean_reward
+                    logger.info("Anisha: reward/mean{}] = {}".format(sweep_suffix, str(stats[f"reward/mean{sweep_suffix}"])))
 
                 # additionally log any other metrics
                 if self.metric_fn:
@@ -409,6 +421,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                     metric_time = time()
                     metrics = self.metric_fn(samples=str_samples, prompts=str_prompts, outputs=str_outputs, **metadata)
                     stats["time/metric"] = time() - metric_time
+                    logger.info("Anisha: stats[time/metric]= ", str(stats["time/metric"]))
 
                     mean_metrics = {
                         f"metrics/{k}{sweep_suffix}": torch.as_tensor(xs).mean(-1).item() for k, xs in metrics.items()
@@ -561,7 +574,9 @@ class AccelerateRLTrainer(BaseRLTrainer):
                             self.save_pretrained(directory)
 
                     stats["time/forward"] = forward_time
+                    logger.info("Anisha: stats[time/forward]=forward_time={}".format(stats["time/forward"]))
                     stats["time/backward"] = backward_time
+                    logger.info("Anisha: stats[time/forward]=backward_time={}".format(backward_time))
                     for group_number, lr in enumerate(self.scheduler.get_last_lr()):
                         stats[f"learning_rate_group_{group_number}"] = lr
 
@@ -598,6 +613,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                     tbar.update()
 
                     self.accelerator.log(stats, step=self.iter_count)
+                    logger.info(f"Anisha: stats={stats}")
 
                     if self.iter_count >= self.total_steps:
                         return results

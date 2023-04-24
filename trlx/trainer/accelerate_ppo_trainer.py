@@ -27,6 +27,8 @@ from trlx.trainer.accelerate_base_trainer import AccelerateRLTrainer
 from trlx.utils import Clock, infinite_dataloader
 from trlx.utils.modeling import RunningMoments, gather_dict, logprobs_of_labels
 
+import torch_xla.core.xla_model as xm
+
 logger = logging.get_logger(__name__)
 
 
@@ -140,6 +142,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             batch: Previous batch of episodes
         """
         # Move `batch` data to `accelerator` device
+        logger.info("Anisha: entering loss ")
         query_tensors = batch.query_tensors.to(self.accelerator.device)
         response_tensors = batch.response_tensors.to(self.accelerator.device)
         old_logprobs = batch.logprobs.to(self.accelerator.device)
@@ -203,7 +206,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             returns=returns,
             mask=mask,
         )
-
+        logger.info(f"Anisha: loss = {loss}")
         return loss, stats
 
     def setup_rollout_logging(self, config):
@@ -285,7 +288,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             samples = self.generate(batch["input_ids"], batch["attention_mask"])
             stats["time/exp_generate"] = time() - exp_generate_time
 
-            logger.info("Anisha: stats[time/exp_generate]={}".format(stats["time/exp_generate"]))
+            logger.info("Anisha: stats[time/exp_generate]={}".format(str(stats["time/exp_generate"])))
 
             prompt_tensors = batch.input_ids
             device = samples.device
@@ -300,9 +303,13 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             gathered_samples = self.accelerator.gather(padded_samples)
             gathered_prompts = self.accelerator.gather(padded_prompts)
             gathered_prompt_sizes = self.accelerator.gather(prompt_sizes)
-            metadata = gather_dict({k: v for k, v in batch.items() if k != "input_ids" and k != "attention_mask"})
+            metadata = {k: v for k, v in batch.items() if k != "input_ids" and k != "attention_mask"}
+            if not metadata:
+                metadata = gather_dict(metadata)
+            #Anisha:
+            xm.mark_step()
 
-            if True: #Anisha:self.accelerator.is_main_process:
+            if self.accelerator.is_main_process:
                 all_str_samples, all_str_prompts, all_str_outputs = self.decode(
                     gathered_prompts, gathered_samples, gathered_prompt_sizes, append_eos_token=True
                 )
@@ -317,14 +324,15 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                     device=device,
                 )
                 stats["time/exp_score"] = time() - exp_score_time
+                logger.info("Anisha = ",str(stats["time/exp_score"]))
 
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
             else:
                 all_scores = None
 
-            logger.info(f"Anisha: all_scores = {all_scores}")
+            # logger.info(f"Anisha: all_scores = {all_scores}")
 
-            if torch.distributed.is_initialized():
+            if True:#torch.distributed.is_initialized():
                 scores = torch.empty(len(samples), device=device)
                 torch.distributed.scatter(scores, all_scores)
             else:
@@ -350,6 +358,8 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 for output in outputs
             ]
             sample_outputs = torch.vstack(outputs).to(device)
+            #Anisha:
+            xm.mark_step()
 
             # store statistics of the initial rollout as reference
             if self.ref_mean is None:
@@ -359,6 +369,8 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             stats["exp_scores/std"] = all_scores_std.item()
             stats["exp_scores/running_mean"] = self.running_moments.mean.item()
             stats["exp_scores/running_std"] = self.running_moments.std.item()
+
+            logger.info("Anisha: stats[exp_scores/mean] = ",str(stats["exp_scores/mean"]))
 
             if self.config.method.scale_reward == "running":
                 scores /= self.running_moments.std
@@ -402,11 +414,11 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                         ).logits
             else:
                 all_tokens = torch.cat((prompt_tensors.to(device), sample_outputs), dim=1)
-                logger.info(f"Anisha: all_tokens.shape={all_tokens.shape}, and \n all_tokens[0]={all_tokens[0]}")
+                # logger.info(f"Anisha: all_tokens.shape={all_tokens.shape}, and \n all_tokens[0]={all_tokens[0]}")
                 attention_mask = all_tokens.not_equal(self.tokenizer.pad_token_id).long().to(device)
-                logger.info(f"Anisha: attention_mask in accelerate_ppo_trainer={attention_mask}")
-                logger.info(f"Anisha: attention_mask[0] in accelerate_ppo_trainer={attention_mask[0]}")
-                logger.info(f"Anisha: attention_mask.shape in accelerate_ppo_trainer={attention_mask.shape}")
+                # logger.info(f"Anisha: attention_mask in accelerate_ppo_trainer={attention_mask}")
+                # logger.info(f"Anisha: attention_mask[0] in accelerate_ppo_trainer={attention_mask[0]}")
+                # logger.info(f"Anisha: attention_mask.shape in accelerate_ppo_trainer={attention_mask.shape}")
                 with torch.no_grad():
                     logits, *_, values = self.model(
                         all_tokens,
@@ -482,6 +494,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             exp_time = clock.tick()
             tbar.set_description(f"[rollout {len(ppo_rl_elements)} / {num_rollouts}]")
             tbar.update(min(rollout_count, num_rollouts))
+            xm.mark_step()
         tbar.close()
 
         if torch.distributed.is_initialized():
