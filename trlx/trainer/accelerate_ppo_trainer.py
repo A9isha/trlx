@@ -304,7 +304,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             gathered_prompts = self.accelerator.gather(padded_prompts)
             gathered_prompt_sizes = self.accelerator.gather(prompt_sizes)
             metadata = {k: v for k, v in batch.items() if k != "input_ids" and k != "attention_mask"}
-            if not metadata:
+            if metadata:
                 metadata = gather_dict(metadata)
             #Anisha:
             xm.mark_step()
