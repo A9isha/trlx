@@ -332,7 +332,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
 
             # logger.info(f"Anisha: all_scores = {all_scores}")
 
-            if True:#torch.distributed.is_initialized():
+            if torch.distributed.is_initialized():
                 scores = torch.empty(len(samples), device=device)
                 torch.distributed.scatter(scores, all_scores)
             else:
