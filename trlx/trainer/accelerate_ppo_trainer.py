@@ -308,6 +308,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 metadata = gather_dict(metadata)
             #Anisha:
             xm.mark_step()
+            logger.info(f"Anisha: gathered_samples.shape = {gathered_samples.shape}")
 
             if self.accelerator.is_main_process:
                 all_str_samples, all_str_prompts, all_str_outputs = self.decode(
@@ -323,20 +324,27 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                     dtype=torch.float,
                     device=device,
                 )
+                xm.mark_step()
                 stats["time/exp_score"] = time() - exp_score_time
                 logger.info("Anisha = ",str(stats["time/exp_score"]))
-
+                logger.info(f"Anisha: all_scores.shape = {all_scores.shape} in main process")
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
-
-                if torch.distributed.is_initialized():
-                    scores = torch.empty(len(samples), device=device)
-                    torch.distributed.scatter(scores, all_scores)
-                else:
-                    scores = all_scores[0].clone().detach()
+                logger.info(f"Anisha: len(all_scores) = {len(all_scores)} in main process after reshape/unbind")
+                logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape} in main process")
                 
             else:
-                all_scores = None
+                all_scores = torch.zeros(gathered_samples.shape[0]).float().to(device)
+                logger.info(f"Anisha: all_scores.shape = {all_scores.shape}")
+                all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
+                logger.info(f"Anisha: len(all_scores) = {len(all_scores)}")
+                logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape}")
             
+            if torch.distributed.is_initialized():
+                scores = torch.empty(len(samples), dtype=torch.float, device=device)
+                torch.distributed.reduce_scatter(scores, all_scores)
+            else:
+                scores = all_scores[0].clone().detach()
+
             xm.mark_step()
             logger.info(f"Anisha: len(scores) = {len(scores)}")
 
