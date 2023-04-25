@@ -150,6 +150,12 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
         old_rewards = batch.rewards.to(self.accelerator.device)
         response_length = old_rewards.shape[1]
 
+        logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
+        logger.info(f"Anisha: old_logprobs.requires_grad = {old_logprobs.requires_grad}")
+        logger.info(f"Anisha: old_values.requires_grad = {old_values.requires_grad}")
+        logger.info(f"Anisha: old_rewards.requires_grad = {old_rewards.requires_grad}")
+        logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
+
         advantages, returns = self.config.method.get_advantages_and_returns(old_values, old_rewards, response_length)
 
         if self.config.model.model_arch_type == "seq2seq":
@@ -196,6 +202,11 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 values_pred[:, start:end],
                 attention_mask[:, start:end],
             )
+            logger.info(f"Anisha: logits.requires_grad = {logits.requires_grad}")
+            logger.info(f"Anisha: logprobs.requires_grad = {logprobs.requires_grad}")
+            logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
+            logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
+
 
         loss, stats = self.config.method.loss(
             logprobs=logprobs,
@@ -277,7 +288,6 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
         ppo_rl_elements = []
         stats = {}
         clock = Clock()
-        torch.set_grad_enabled(False)
         while len(ppo_rl_elements) < num_rollouts:
             # Get next batch in prompt dataset
             batch: PromptBatch = next(self.prompt_iterator)
@@ -286,6 +296,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
 
             # Generate samples from the language model (similar to using HuggingFace `generate` method)
             samples = self.generate(batch["input_ids"], batch["attention_mask"])
+            print(f"Anisha: samples.requires_grad={samples.requires_grad}")
             stats["time/exp_generate"] = time() - exp_generate_time
 
             logger.info("Anisha: stats[time/exp_generate]={}".format(str(stats["time/exp_generate"])))
@@ -430,6 +441,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 # logger.info(f"Anisha: attention_mask in accelerate_ppo_trainer={attention_mask}")
                 # logger.info(f"Anisha: attention_mask[0] in accelerate_ppo_trainer={attention_mask[0]}")
                 # logger.info(f"Anisha: attention_mask.shape in accelerate_ppo_trainer={attention_mask.shape}")
+                logger.info(f"Anisha: in make_experience, all_tokens.requires_grad={all_tokens.requires_grad}")
                 with torch.no_grad():
                     logits, *_, values = self.model(
                         all_tokens,
