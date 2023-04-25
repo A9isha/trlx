@@ -509,7 +509,10 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
         tbar.close()
 
         if torch.distributed.is_initialized():
-            torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.AVG)
+            #Anisha: AVG divides values by the world size before summing across ranks. 
+            # AVG is only available with the NCCL backend, and only for NCCL versions 2.10 or later.
+            # torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.AVG)
+            torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.SUM)
 
         stats["policy/sqrt_kl"] = torch.sqrt(self.mean_kl).item()
         stats["kl_ctl_value"] = self.kl_ctl.value

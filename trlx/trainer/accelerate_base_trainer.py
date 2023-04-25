@@ -350,7 +350,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
             all_metadata = []
             generate_time = time()
             for i_prompt, prompts in enumerate(self.eval_dataloader):
-                metadata = {k: v for k, v in prompts.items() if k != "input_ids" and k != "attention_mask"}
+                metadata = {k: v.to(prompts["input_ids"].device) for k, v in prompts.items() if k != "input_ids" and k != "attention_mask"}
                 if self.generate_sweep_kwarg:
                     samples = self.generate_eval(
                         prompts["input_ids"], prompts["attention_mask"], **{gen_sweep_arg: gen_sweep_value}
@@ -375,7 +375,8 @@ class AccelerateRLTrainer(BaseRLTrainer):
                 all_prompts.extend(prompts.tolist())
                 all_prompt_sizes.extend(prompt_sizes.tolist())
 
-                metadata = gather_dict(metadata, self.accelerator.gradient_state)
+                if metadata: #Anisha: works because for us there is nothing in metadata
+                    metadata = gather_dict(metadata, self.accelerator.gradient_state)
                 all_metadata.append(metadata)
 
                 desc = [
