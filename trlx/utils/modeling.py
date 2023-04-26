@@ -9,6 +9,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import transformers
 
+import torch_xla.core.xla_model as xm
+
 try:
     from opendelta import (
         AdapterModel,
@@ -193,12 +195,14 @@ def get_global_statistics(xs: torch.Tensor) -> Tuple[float, float, int]:
     Computes element-wise mean and variance of the tensor across processes
     """
     sum_and_count = torch.tensor([xs.sum(), xs.numel()], device=xs.device)
-    dist.all_reduce(sum_and_count, dist.ReduceOp.SUM)
+    # dist.all_reduce(sum_and_count, dist.ReduceOp.SUM)
+    xm.all_reduce(xm.REDUCE_SUM, sum_and_count)
     global_sum, count = sum_and_count
     global_mean = global_sum / count
 
     sum_var = torch.sum((xs - global_mean) ** 2)
-    dist.all_reduce(sum_var, dist.ReduceOp.SUM)
+    # dist.all_reduce(sum_var, dist.ReduceOp.SUM)
+    xm.all_reduce(xm.REDUCE_SUM, sum_var)
     global_var = sum_var / count
     return global_mean, global_var, count
 

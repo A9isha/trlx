@@ -29,6 +29,7 @@ from trlx.utils.modeling import RunningMoments, gather_dict, logprobs_of_labels
 
 import torch_xla.core.xla_model as xm
 
+
 logger = logging.get_logger(__name__)
 
 
@@ -142,7 +143,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             batch: Previous batch of episodes
         """
         # Move `batch` data to `accelerator` device
-        logger.info("Anisha: entering loss ")
+        # logger.info("Anisha: entering loss ")
         query_tensors = batch.query_tensors.to(self.accelerator.device)
         response_tensors = batch.response_tensors.to(self.accelerator.device)
         old_logprobs = batch.logprobs.to(self.accelerator.device)
@@ -150,11 +151,11 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
         old_rewards = batch.rewards.to(self.accelerator.device)
         response_length = old_rewards.shape[1]
 
-        logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
-        logger.info(f"Anisha: old_logprobs.requires_grad = {old_logprobs.requires_grad}")
-        logger.info(f"Anisha: old_values.requires_grad = {old_values.requires_grad}")
-        logger.info(f"Anisha: old_rewards.requires_grad = {old_rewards.requires_grad}")
-        logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
+        # logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
+        # logger.info(f"Anisha: old_logprobs.requires_grad = {old_logprobs.requires_grad}")
+        # logger.info(f"Anisha: old_values.requires_grad = {old_values.requires_grad}")
+        # logger.info(f"Anisha: old_rewards.requires_grad = {old_rewards.requires_grad}")
+        # logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
 
         advantages, returns = self.config.method.get_advantages_and_returns(old_values, old_rewards, response_length)
 
@@ -202,10 +203,10 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 values_pred[:, start:end],
                 attention_mask[:, start:end],
             )
-            logger.info(f"Anisha: logits.requires_grad = {logits.requires_grad}")
-            logger.info(f"Anisha: logprobs.requires_grad = {logprobs.requires_grad}")
-            logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
-            logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
+            # logger.info(f"Anisha: logits.requires_grad = {logits.requires_grad}")
+            # logger.info(f"Anisha: logprobs.requires_grad = {logprobs.requires_grad}")
+            # logger.info(f"Anisha: query_tensors.requires_grad = {query_tensors.requires_grad}")
+            # logger.info(f"Anisha: response_tensors.requires_grad = {response_tensors.requires_grad}")
 
 
         loss, stats = self.config.method.loss(
@@ -319,7 +320,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 metadata = gather_dict(metadata)
             #Anisha:
             xm.mark_step()
-            logger.info(f"Anisha: gathered_samples.shape = {gathered_samples.shape}")
+            # logger.info(f"Anisha: gathered_samples.shape = {gathered_samples.shape}")
 
             if self.accelerator.is_main_process:
                 all_str_samples, all_str_prompts, all_str_outputs = self.decode(
@@ -338,17 +339,17 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 xm.mark_step()
                 stats["time/exp_score"] = time() - exp_score_time
                 logger.info("Anisha = ",str(stats["time/exp_score"]))
-                logger.info(f"Anisha: all_scores.shape = {all_scores.shape} in main process")
+                # logger.info(f"Anisha: all_scores.shape = {all_scores.shape} in main process")
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
-                logger.info(f"Anisha: len(all_scores) = {len(all_scores)} in main process after reshape/unbind")
-                logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape} in main process")
+                # logger.info(f"Anisha: len(all_scores) = {len(all_scores)} in main process after reshape/unbind")
+                # logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape} in main process")
                 
             else:
                 all_scores = torch.zeros(gathered_samples.shape[0]).float().to(device)
-                logger.info(f"Anisha: all_scores.shape = {all_scores.shape}")
+                # logger.info(f"Anisha: all_scores.shape = {all_scores.shape}")
                 all_scores = list(all_scores.reshape(self.accelerator.num_processes, -1).unbind())
-                logger.info(f"Anisha: len(all_scores) = {len(all_scores)}")
-                logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape}")
+                # logger.info(f"Anisha: len(all_scores) = {len(all_scores)}")
+                # logger.info(f"Anisha: all_scores[0].shape = {all_scores[0].shape}")
             
             if torch.distributed.is_initialized():
                 scores = torch.empty(len(samples), dtype=torch.float, device=device)
@@ -357,7 +358,7 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
                 scores = all_scores[0].clone().detach()
 
             xm.mark_step()
-            logger.info(f"Anisha: len(scores) = {len(scores)}")
+            # logger.info(f"Anisha: len(scores) = {len(scores)}")
 
             
             str_samples, str_prompts, str_outputs = self.decode(prompt_tensors, samples, append_eos_token=True)
@@ -519,12 +520,13 @@ class AcceleratePPOTrainer(AccelerateRLTrainer):
             tbar.update(min(rollout_count, num_rollouts))
             xm.mark_step()
         tbar.close()
-
+        xm.mark_step()
         if torch.distributed.is_initialized():
             #Anisha: AVG divides values by the world size before summing across ranks. 
             # AVG is only available with the NCCL backend, and only for NCCL versions 2.10 or later.
             # torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.AVG)
-            torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.SUM)
+            # torch.distributed.all_reduce(self.mean_kl, torch.distributed.ReduceOp.SUM)
+            xm.all_reduce(xm.REDUCE_SUM,self.mean_kl)
 
         stats["policy/sqrt_kl"] = torch.sqrt(self.mean_kl).item()
         stats["kl_ctl_value"] = self.kl_ctl.value

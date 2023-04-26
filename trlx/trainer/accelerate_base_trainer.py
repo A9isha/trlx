@@ -36,6 +36,8 @@ from trlx.utils.modeling import (
     parse_delta_kwargs,
 )
 
+import torch_xla.core.xla_model as xm
+
 logger = logging.get_logger(__name__)
 
 
@@ -577,7 +579,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                     stats["time/forward"] = forward_time
                     logger.info("Anisha: stats[time/forward]=forward_time={}".format(stats["time/forward"]))
                     stats["time/backward"] = backward_time
-                    logger.info("Anisha: stats[time/forward]=backward_time={}".format(backward_time))
+                    logger.info("Anisha: stats[time/backward]=backward_time={}".format(backward_time))
                     for group_number, lr in enumerate(self.scheduler.get_last_lr()):
                         stats[f"learning_rate_group_{group_number}"] = lr
 
@@ -599,8 +601,11 @@ class AccelerateRLTrainer(BaseRLTrainer):
                             else:
                                 do_save = False
                             do_save = torch.tensor(do_save, device=self.accelerator.device)
+                            xm.mark_step()
                             if torch.distributed.is_initialized():
-                                torch.distributed.all_reduce(do_save, torch.distributed.ReduceOp.MAX)
+                                # torch.distributed.all_reduce(do_save, torch.distributed.ReduceOp.MAX)
+                                #Anisha:
+                                xm.all_reduce(xm.REDUCE_MAX,do_save)
                             if do_save:
                                 directory = os.path.join(self.config.train.checkpoint_dir, "best_checkpoint")
                                 logger.info(f"Saving the best state so far into {directory}")
@@ -618,10 +623,13 @@ class AccelerateRLTrainer(BaseRLTrainer):
 
                     if self.iter_count >= self.total_steps:
                         return results
+                    xm.mark_step()
 
                 self.post_backward_callback()
+                xm.mark_step()
 
             self.post_epoch_callback()
+            xm.mark_step()
         tbar.close()
 
     @abstractmethod
