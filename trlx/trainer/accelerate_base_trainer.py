@@ -304,7 +304,9 @@ class AccelerateRLTrainer(BaseRLTrainer):
 
     def save(self, directory: Optional[str] = None, **kwargs):
         """Creates a checkpoint of the optimizer, scheduler and model"""
-        self.accelerator.save_state(directory or self.config.train.checkpoint_dir, **kwargs)
+        logger.info(f"Anisha: inside save directory={directory} or self.config.train.checkpoint_dir={self.config.train.checkpoint_dir}, kwargs = {kwargs}")
+        # self.accelerator.save_state(directory or self.config.train.checkpoint_dir, **kwargs)
+        self.accelerator.save_state(output_dir=directory, **kwargs)
 
     def load(self, directory: Optional[str] = None, **kwargs):
         """Load checkpoint of optimizer, scheduler and a model"""
@@ -601,16 +603,23 @@ class AccelerateRLTrainer(BaseRLTrainer):
                             else:
                                 do_save = False
                             do_save = torch.tensor(do_save, device=self.accelerator.device)
+                            logger.info(f"Anisha: do_save before = {do_save}")
                             xm.mark_step()
-                            if torch.distributed.is_initialized():
+                            # if torch.distributed.is_initialized():
                                 # torch.distributed.all_reduce(do_save, torch.distributed.ReduceOp.MAX)
                                 #Anisha:
-                                xm.all_reduce(xm.REDUCE_MAX,do_save)
+                            xm.all_reduce(xm.REDUCE_MAX,do_save)
+                            logger.info(f"Anisha: do_save after = {do_save}")
                             if do_save:
                                 directory = os.path.join(self.config.train.checkpoint_dir, "best_checkpoint")
                                 logger.info(f"Saving the best state so far into {directory}")
+                                xm.mark_step()
                                 if self.config.train.save_optimizer:
-                                    self.save(directory)
+                                    # self.save(directory)
+                                    #Anisha:
+                                    logger.info(f"Anisha: about to save directory={directory} or self.config.train.checkpoint_dir={self.config.train.checkpoint_dir}")
+                                    # self.accelerator.save_state(directory or self.config.train.checkpoint_dir, **kwargs)
+                                    self.accelerator.save_state(output_dir=directory)
                                 else:
                                     self.save_pretrained(directory)
 
