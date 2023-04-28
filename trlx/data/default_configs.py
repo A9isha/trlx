@@ -15,12 +15,12 @@ from .configs import (
 def default_ppo_config():
     return TRLConfig(
         train=TrainConfig(
-            seq_length=1024,
+            seq_length=64,
             epochs=100,
-            total_steps=10000,
-            batch_size=32,
-            checkpoint_interval=10000,
-            eval_interval=100,
+            total_steps=1000,
+            batch_size=128,
+            checkpoint_interval=20,
+            eval_interval=2,
             pipeline="PromptPipeline",
             trainer="AcceleratePPOTrainer",
             tracker="wandb",
@@ -34,7 +34,7 @@ def default_ppo_config():
         scheduler=SchedulerConfig(name="cosine_annealing", kwargs=dict(T_max=1e12, eta_min=3e-5)),
         method=PPOConfig(
             name="PPOConfig",
-            num_rollouts=128,
+            num_rollouts=16,
             chunk_size=128,
             ppo_epochs=4,
             init_kl_coef=0.001,

@@ -306,7 +306,9 @@ class AccelerateRLTrainer(BaseRLTrainer):
         """Creates a checkpoint of the optimizer, scheduler and model"""
         logger.info(f"Anisha: inside save directory={directory} or self.config.train.checkpoint_dir={self.config.train.checkpoint_dir}, kwargs = {kwargs}")
         # self.accelerator.save_state(directory or self.config.train.checkpoint_dir, **kwargs)
-        self.accelerator.save_state(output_dir=directory, **kwargs)
+        returned_save_state = self.accelerator.save_state(output_dir=directory, **kwargs)
+        logger.info(f"Anisha: done save_state, returned_save_state = {returned_save_state}")
+
 
     def load(self, directory: Optional[str] = None, **kwargs):
         """Load checkpoint of optimizer, scheduler and a model"""
@@ -495,6 +497,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
         Samples batches from `self.store`, updates model and periodically evaluates it on `self.eval_dataloader`
         """
         logger.info("Starting training")
+        xm.rendezvous('learn')
 
         self.generate_sweep_kwarg = None
         for k, v in self.config.method.gen_kwargs.items():
@@ -602,24 +605,22 @@ class AccelerateRLTrainer(BaseRLTrainer):
                                 do_save = True
                             else:
                                 do_save = False
-                            do_save = torch.tensor(do_save, device=self.accelerator.device)
+                            do_save = torch.tensor(do_save, device=self.accelerator.device).int()
                             logger.info(f"Anisha: do_save before = {do_save}")
-                            xm.mark_step()
+                            xm.rendezvous('leave')
                             # if torch.distributed.is_initialized():
                                 # torch.distributed.all_reduce(do_save, torch.distributed.ReduceOp.MAX)
                                 #Anisha:
-                            xm.all_reduce(xm.REDUCE_MAX,do_save)
+                            xm.all_reduce(xm.REDUCE_SUM,do_save)
+                            xm.mark_step()
                             logger.info(f"Anisha: do_save after = {do_save}")
                             if do_save:
                                 directory = os.path.join(self.config.train.checkpoint_dir, "best_checkpoint")
                                 logger.info(f"Saving the best state so far into {directory}")
                                 xm.mark_step()
                                 if self.config.train.save_optimizer:
-                                    # self.save(directory)
-                                    #Anisha:
-                                    logger.info(f"Anisha: about to save directory={directory} or self.config.train.checkpoint_dir={self.config.train.checkpoint_dir}")
-                                    # self.accelerator.save_state(directory or self.config.train.checkpoint_dir, **kwargs)
-                                    self.accelerator.save_state(output_dir=directory)
+                                    logger.info(f"Anisha: about to save directory={directory}")
+                                    self.save(directory)
                                 else:
                                     self.save_pretrained(directory)
 

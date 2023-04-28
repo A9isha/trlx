@@ -217,7 +217,7 @@ class TrainConfig:
     entity_name: Optional[str] = None
     group_name: Optional[str] = None
 
-    checkpoint_dir: str = "ckpts"
+    checkpoint_dir: str = "/home/mazumdera/trlx/checkpoints"
     rollout_logging_dir: Optional[str] = None
     save_best: bool = True
     save_optimizer: bool = True
