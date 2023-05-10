@@ -611,7 +611,7 @@ class AccelerateRLTrainer(BaseRLTrainer):
                             # if torch.distributed.is_initialized():
                                 # torch.distributed.all_reduce(do_save, torch.distributed.ReduceOp.MAX)
                                 #Anisha:
-                            xm.all_reduce(xm.REDUCE_SUM,do_save)
+                            do_save = xm.all_reduce(xm.REDUCE_SUM,do_save)
                             xm.mark_step()
                             logger.info(f"Anisha: do_save after = {do_save}")
                             if do_save:

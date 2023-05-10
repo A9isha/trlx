@@ -65,7 +65,10 @@ from trlx.data.default_configs import TRLConfig, default_ppo_config
 import torch_xla.core.xla_model as xm
 import torch_xla.debug.metrics as met
 import torch_xla.debug.profiler as xp
-import torch_xla.distributed.xla_backend
+# import torch_xla.distributed.xla_backend # for XRT
+import torch_xla.experimental.pjrt_backend
+import torch_xla.experimental.pjrt as pjrt
+
 
 def get_positive_score(scores):
     "Extract value associated with a positive sentiment from pipeline's output"
@@ -76,7 +79,8 @@ def setup(rank, world_size):
     os.environ['MASTER_PORT'] = '12355'
 
     # initialize the xla process group
-    torch.distributed.init_process_group("xla", rank=rank, world_size=world_size)
+    # torch.distributed.init_process_group("xla", rank=rank, world_size=world_size) #for XRT
+    torch.distributed.init_process_group('xla', init_method='pjrt://') #for PJRT
 
 def main(hparams={}):
     
@@ -137,5 +141,6 @@ def main(hparams={}):
 
 
 if __name__ == "__main__":
+    os.environ['PJRT_DEVICE'] = 'TPU'
     hparams = {} if len(sys.argv) == 1 else json.loads(sys.argv[1])
     main(hparams)
